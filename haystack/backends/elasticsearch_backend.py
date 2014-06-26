@@ -226,7 +226,7 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
 
                 # Delete by query in Elasticsearch asssumes you're dealing with
                 # a ``query`` root object. :/
-                query = {'query': {'query_string': {'query': " OR ".join(models_to_delete)}}}
+                query = {'query_string': {'query': " OR ".join(models_to_delete)}}
                 self.conn.delete_by_query(index=self.index_name, doc_type='modelresult', body=query)
         except elasticsearch.TransportError as e:
             if not self.silently_fail:
@@ -270,10 +270,7 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
         filters = []
 
         if fields:
-            if isinstance(fields, (list, set)):
-                fields = " ".join(fields)
-
-            kwargs['fields'] = fields
+            kwargs['fields'] = list(fields)
 
         if sort_by is not None:
             order_list = []
@@ -434,22 +431,9 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
 
         if dwithin is not None:
             lng, lat = dwithin['point'].get_coords()
-
-            # NB: the 1.0.0 release of elasticsearch introduce an
-            #     incompatible change on the distance filter formating
-            if elasticsearch.VERSION >= (1, 0, 0):
-                distance = "%(dist).6f%(unit)s" % {
-                        'dist': dwithin['distance'].km,
-                        'unit': "km"
-                    }
-            else:
-                distance = dwithin['distance'].km
-
-
             dwithin_filter = {
                 "geo_distance": {
-#                    "distance": dwithin['distance'].km,
-                    "distance": distance,
+                    "distance": dwithin['distance'].km,
                     dwithin['field']: {
                         "lat": lat,
                         "lon": lng
@@ -584,8 +568,14 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
         content_field = unified_index.document_field
 
         for raw_result in raw_results.get('hits', {}).get('hits', []):
-            source = raw_result['_source']
-            app_label, model_name = source[DJANGO_CT].split('.')
+
+            if 'fields' in raw_result:
+                source = raw_result['fields']
+            else:
+                source = raw_result.get('_source', {})
+
+            id = raw_result['_id']
+            app_label, model_name, idnum = id.split('.')
             additional_fields = {}
             model = get_model(app_label, model_name)
 
@@ -593,6 +583,15 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
                 for key, value in source.items():
                     index = unified_index.get_index(model)
                     string_key = str(key)
+
+                    if isinstance(value, list):
+                        if string_key in index.fields:
+                            if not index.fields[string_key].is_multivalued:
+                                source[key] = value = value[0]
+                        elif value:
+                            source[key] = value = value[0]
+                        else:
+                            source[key] = value = None
 
                     if string_key in index.fields and hasattr(index.fields[string_key], 'convert'):
                         additional_fields[string_key] = index.fields[string_key].convert(value)
