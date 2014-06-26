@@ -1,3 +1,6 @@
+from os import environ
+
+
 SECRET_KEY = "Please do not spew DeprecationWarnings"
 
 # Haystack settings for running tests.
@@ -28,3 +31,6 @@ HAYSTACK_CONNECTIONS = {
 }
 
 SITE_ID = 1
+
+GEOS_LIBRARY_PATH = environ.get('GEOS_LIBRARY_PATH', '')
+GDAL_LIBRARY_PATH = environ.get('GDAL_LIBRARY_PATH', '')

@@ -434,9 +434,22 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
 
         if dwithin is not None:
             lng, lat = dwithin['point'].get_coords()
+
+            # NB: the 1.0.0 release of elasticsearch introduce an
+            #     incompatible change on the distance filter formating
+            if elasticsearch.VERSION >= (1, 0, 0):
+                distance = "%(dist).6f%(unit)s" % {
+                        'dist': dwithin['distance'].km,
+                        'unit': "km"
+                    }
+            else:
+                distance = dwithin['distance'].km
+
+
             dwithin_filter = {
                 "geo_distance": {
-                    "distance": dwithin['distance'].km,
+#                    "distance": dwithin['distance'].km,
+                    "distance": distance,
                     dwithin['field']: {
                         "lat": lat,
                         "lon": lng
@@ -703,12 +716,12 @@ class ElasticsearchSearchBackend(BaseSearchBackend):
 #            the right type of storage?
 DEFAULT_FIELD_MAPPING = {'type': 'string', 'analyzer': 'snowball'}
 FIELD_MAPPINGS = {
-    'edge_ngram': {'type': 'string', 'analyzer': 'edgengram_analyzer'},        
-    'ngram':      {'type': 'string', 'analyzer': 'ngram_analyzer'},        
+    'edge_ngram': {'type': 'string', 'analyzer': 'edgengram_analyzer'},
+    'ngram':      {'type': 'string', 'analyzer': 'ngram_analyzer'},
     'date':       {'type': 'date'},
     'datetime':   {'type': 'date'},
 
-    'location':   {'type': 'geo_point'},        
+    'location':   {'type': 'geo_point'},
     'boolean':    {'type': 'boolean'},
     'float':      {'type': 'float'},
     'long':       {'type': 'long'},
